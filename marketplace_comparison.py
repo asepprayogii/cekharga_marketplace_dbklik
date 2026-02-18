@@ -311,6 +311,7 @@ st.markdown(f"""
   <div class="lbl">Baris Berhasil Dicocokkan (ID/SKU)</div>
 </div>""", unsafe_allow_html=True)
 
+# ─── Loop per-pasangan: stats + tabel detail ────────────────────────────────
 for label, r in results.items():
     st.markdown(f"#### 🔍 {label}")
 
@@ -343,68 +344,67 @@ for label, r in results.items():
         </div>
         """, unsafe_allow_html=True)
 
-    st.markdown("<br>", unsafe_allow_html=True)
+    # ─── Tabel Detail per-pasangan ─────────────────────────────────────────────
+    st.markdown(f'<p style="font-size:0.9rem; color:#888; margin-top:1rem; margin-bottom:0.5rem;">📋 Tabel Detail</p>', unsafe_allow_html=True)
 
-st.markdown("---")
+    # Kolom yang ditampilkan untuk pasangan ini
+    pair_cols = [id_col_a, f"[{label}] Harga A", f"[{label}] Harga B",
+                 f"[{label}] Status", f"[{label}] Selisih"]
+    pair_cols = [c for c in pair_cols if c in merged.columns]
+    status_col = f"[{label}] Status"
 
-# ─── Tabel Detail ──────────────────────────────────────────────────────────────
-st.markdown('<p class="section-title">📋 Tabel Detail</p>', unsafe_allow_html=True)
+    # Filter untuk tabel ini
+    filter_key = f"filter_{label}"
+    filter_sel = st.selectbox("Filter baris:", [
+        "Semua", "Sama saja", "Ada perbedaan",
+        "Data Kosong", "Data Kosong (A kosong)", "Data Kosong (B kosong)", "Data Kosong (keduanya)"
+    ], key=filter_key)
 
-display_cols = [id_col_a]
-for label in results:
-    display_cols += [f"[{label}] Harga A", f"[{label}] Harga B",
-                     f"[{label}] Status",  f"[{label}] Selisih"]
-display_cols = [c for c in display_cols if c in merged.columns]
-status_cols  = [c for c in display_cols if "Status" in c]
+    # Buat DataFrame untuk tabel ini
+    base_df = merged[pair_cols].copy().reset_index(drop=True)
 
-filter_sel = st.selectbox("Filter baris:", [
-    "Semua", "Sama saja", "Ada perbedaan",
-    "Data Kosong", "Data Kosong (A kosong)", "Data Kosong (B kosong)", "Data Kosong (keduanya)"
-])
+    # Filter berdasarkan status kolom
+    if status_col in base_df.columns:
+        status_series = base_df[status_col].astype(str)
 
-# Buat kolom gabungan semua status untuk filtering yang andal
-base_df = merged[display_cols].copy().reset_index(drop=True)
-
-# Jika tidak ada kolom status, tampilkan semuanya
-if not status_cols:
-    show_df = base_df
-else:
-    # DataFrame berisi teks status untuk setiap kolom status
-    status_str_df = base_df[status_cols].astype(str)
-
-    if filter_sel == "Semua":
-        show_df = base_df
-    elif filter_sel == "Sama saja":
-        # Semua kolom status harus persis "Sama"
-        show_df = base_df[(status_str_df == "Sama").all(axis=1)]
-    elif filter_sel == "Ada perbedaan":
-        mask = status_str_df.apply(lambda col: col.str.contains("Tidak Sama", na=False)).any(axis=1)
-        show_df = base_df[mask]
-    elif filter_sel == "Data Kosong":
-        mask = status_str_df.apply(lambda col: col.str.contains("Data Kosong", na=False)).any(axis=1)
-        show_df = base_df[mask]
-    elif filter_sel == "Data Kosong (A kosong)":
-        mask = status_str_df.apply(lambda col: col.str.contains("A kosong", na=False)).any(axis=1)
-        show_df = base_df[mask]
-    elif filter_sel == "Data Kosong (B kosong)":
-        mask = status_str_df.apply(lambda col: col.str.contains("B kosong", na=False)).any(axis=1)
-        show_df = base_df[mask]
-    elif filter_sel == "Data Kosong (keduanya)":
-        mask = status_str_df.apply(lambda col: col.str.contains("A & B kosong", na=False)).any(axis=1)
-        show_df = base_df[mask]
+        if filter_sel == "Semua":
+            show_df = base_df
+        elif filter_sel == "Sama saja":
+            show_df = base_df[status_series == "Sama"]
+        elif filter_sel == "Ada perbedaan":
+            show_df = base_df[status_series.str.contains("Tidak Sama", na=False)]
+        elif filter_sel == "Data Kosong":
+            show_df = base_df[status_series.str.contains("Data Kosong", na=False)]
+        elif filter_sel == "Data Kosong (A kosong)":
+            show_df = base_df[status_series.str.contains("A kosong", na=False)]
+        elif filter_sel == "Data Kosong (B kosong)":
+            show_df = base_df[status_series.str.contains("B kosong", na=False)]
+        elif filter_sel == "Data Kosong (keduanya)":
+            show_df = base_df[status_series.str.contains("A & B kosong", na=False)]
+        else:
+            show_df = base_df
     else:
         show_df = base_df
 
-st.caption(f"Menampilkan {len(show_df):,} baris")
-st.dataframe(show_df.reset_index(drop=True), use_container_width=True, height=400)
+    st.caption(f"Menampilkan {len(show_df):,} baris")
+    st.dataframe(show_df.reset_index(drop=True), use_container_width=True, height=400)
+
+    st.markdown("<br>", unsafe_allow_html=True)
 
 # ─── Download ──────────────────────────────────────────────────────────────────
 st.markdown("---")
 st.markdown('<p class="section-title">⬇️ Download Hasil</p>', unsafe_allow_html=True)
 
+# Bangun display_cols untuk download (semua kolom semua pasangan)
+download_cols = [id_col_a]
+for label in results:
+    download_cols += [f"[{label}] Harga A", f"[{label}] Harga B",
+                      f"[{label}] Status",  f"[{label}] Selisih"]
+download_cols = [c for c in download_cols if c in merged.columns]
+
 buf = io.BytesIO()
 with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-    merged[display_cols].to_excel(writer, sheet_name="Detail", index=False)
+    merged[download_cols].to_excel(writer, sheet_name="Detail", index=False)
     pd.DataFrame([{
         "Marketplace Pair": lbl,
         "Total Baris Cocok": r["matched"],
