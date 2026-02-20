@@ -270,7 +270,17 @@ if run:
         try:
             used_a   = list(dict.fromkeys([p[0] for p in pairs]))
             used_b   = list(dict.fromkeys([p[1] for p in pairs]))
-            df_a_sel = df_a[list(dict.fromkeys([id_col_a] + used_a))].copy()
+
+            # Auto-detect kolom info produk dari Portal SEBELUM merge
+            info_cols_raw = detect_info_cols(df_a)
+            info_col_vals = [v for v in info_cols_raw.values() if v and v in df_a.columns]
+            # Deduplikasi
+            seen_ic = set()
+            info_col_vals = [c for c in info_col_vals if not (c in seen_ic or seen_ic.add(c))]
+
+            # Sertakan kolom info produk di df_a_sel
+            cols_a_all = list(dict.fromkeys([id_col_a] + info_col_vals + used_a))
+            df_a_sel = df_a[cols_a_all].copy()
             df_b_sel = df_b[list(dict.fromkeys([id_col_b] + used_b))].copy()
             df_a_sel[id_col_a] = df_a_sel[id_col_a].astype(str).str.strip()
             df_b_sel[id_col_b] = df_b_sel[id_col_b].astype(str).str.strip()
@@ -339,10 +349,8 @@ if run:
                 "status_col":  status_col,
             })
 
-        # Auto-detect kolom info produk dari file Portal
-        info_cols = detect_info_cols(df_a)
-        # Pastikan kolom yang terdeteksi ada di merged
-        info_cols_valid = {k: v for k, v in info_cols.items() if v and v in merged.columns}
+        # Pastikan kolom info yang terdeteksi ada di merged
+        info_cols_valid = {k: v for k, v in info_cols_raw.items() if v and v in merged.columns}
 
         st.session_state.merged     = merged
         st.session_state.results    = results
